@@ -94,8 +94,24 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
             focal_length_y = intr.params[1]
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
+        elif intr.model in ("SIMPLE_RADIAL", "SIMPLE_RADIAL_FISHEYE"):
+            # params: [f, cx, cy, k]  — treat as SIMPLE_PINHOLE, ignore distortion
+            focal_length_x = intr.params[0]
+            FovY = focal2fov(focal_length_x, height)
+            FovX = focal2fov(focal_length_x, width)
+        elif intr.model in ("RADIAL", "RADIAL_FISHEYE"):
+            # params: [f, cx, cy, k1, k2]  — treat as SIMPLE_PINHOLE, ignore distortion
+            focal_length_x = intr.params[0]
+            FovY = focal2fov(focal_length_x, height)
+            FovX = focal2fov(focal_length_x, width)
+        elif intr.model in ("OPENCV", "FULL_OPENCV"):
+            # params: [fx, fy, cx, cy, k1, k2, p1, p2, ...]  — treat as PINHOLE, ignore distortion
+            focal_length_x = intr.params[0]
+            focal_length_y = intr.params[1]
+            FovY = focal2fov(focal_length_y, height)
+            FovX = focal2fov(focal_length_x, width)
         else:
-            assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
+            assert False, f"Colmap camera model not handled: {intr.model}. Only PINHOLE, SIMPLE_PINHOLE, SIMPLE_RADIAL, RADIAL, and OPENCV cameras are supported!"
 
         n_remove = len(extr.name.split('.')[-1]) + 1
         depth_params = None
@@ -108,6 +124,9 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
         image_path = os.path.join(images_folder, extr.name)
         image_name = extr.name
         depth_path = os.path.join(depths_folder, f"{extr.name[:-n_remove]}.png") if depths_folder != "" else ""
+
+        if not os.path.exists(image_path):
+            continue
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, depth_params=depth_params,
                               image_path=image_path, image_name=image_name, depth_path=depth_path,
