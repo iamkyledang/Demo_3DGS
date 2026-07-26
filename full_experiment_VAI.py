@@ -51,12 +51,27 @@ def run(cmd, desc="", extra_env=None):
 
 
 def main():
+    PRESETS = {
+        "runpod": {
+            "data_root": "/workspace/VAI_NVS_DATA_ROUND2",
+            "output_root": "/workspace/Demo_3DGS/output",
+        },
+        "local": {
+            "data_root": "/mnt/passport/VAI_NVS_DATA_ROUND2",
+            "output_root": "/mnt/passport/gaussian-splatting/output",
+        },
+    }
+
     parser = argparse.ArgumentParser(
         description="Train and render all VAI_NVS_DATA_ROUND2 scenes with gaussian-splatting."
     )
-    parser.add_argument("--data_root", default=os.path.join(os.path.dirname(__file__), "..", "VAI_NVS_DATA_ROUND2"),
+    parser.add_argument("--preset", choices=["runpod", "local"], default=None,
+                        help="Environment preset: 'runpod' or 'local'. "
+                             "Sets --data_root and --output_root automatically. "
+                             "Explicit --data_root / --output_root override the preset.")
+    parser.add_argument("--data_root", default=None,
                         help="Root directory containing per-scene folders.")
-    parser.add_argument("--output_root", default="output",
+    parser.add_argument("--output_root", default=None,
                         help="Root directory for trained model outputs.")
     parser.add_argument("--scenes", nargs="*", default=None,
                         help="Subset of scene names to process. Default: all scenes in data_root.")
@@ -72,9 +87,9 @@ def main():
                              "Use 1 for full res (requires more VRAM), 2 for half res, 4 for quarter res.")
     parser.add_argument("--resolution_scale", type=float, default=1.0,
                         help="Render resolution downscale factor: 1=full, 2=half, etc.")
-    parser.add_argument("--densify_grad_threshold", type=float, default=0.00015,
-                        help="Gradient threshold for Gaussian densification (default: 0.00015). "
-                             "Lower = more Gaussians = finer detail. Upstream default is 0.0002.")
+    parser.add_argument("--densify_grad_threshold", type=float, default=0.0002,
+                        help="Gradient threshold for Gaussian densification (default: 0.0002). "
+                             "Lower = more Gaussians = finer detail but more VRAM. Upstream default is 0.0002.")
     parser.add_argument("--densify_until_iter", type=int, default=15_000,
                         help="Stop densification after this iteration (default: 15000). "
                              "Set to half of --iterations for best quality. Upstream default is 15000.")
@@ -92,11 +107,26 @@ def main():
                         help="Weight for SSIM loss during training (default: 0.3). "
                              "SSIM is 30%% of the competition score. Upstream default is 0.2.")
     parser.add_argument("--opacity_reset_interval", type=int, default=3000,
-                        help="Reset opacity every N iterations (default: 3000). Upstream default is 3000.")
+                        help="Reset opacity every N iterations (default: 3000). "
+                             "Lower = more aggressive size-pruning = fewer Gaussians = less VRAM. Upstream default is 3000.")
     parser.add_argument("--position_lr_max_steps", type=int, default=None,
                         help="Steps over which position LR decays (default: equals --iterations). "
                              "Must match iterations or positions stop being refined early. Upstream default is 30000.")
     args = parser.parse_args()
+
+    # Apply preset paths, then let explicit args override
+    if args.preset is not None:
+        p = PRESETS[args.preset]
+        if args.data_root is None:
+            args.data_root = p["data_root"]
+        if args.output_root is None:
+            args.output_root = p["output_root"]
+
+    # Fall back to sibling-directory defaults if nothing specified
+    if args.data_root is None:
+        args.data_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VAI_NVS_DATA_ROUND2")
+    if args.output_root is None:
+        args.output_root = "output"
 
     # Position LR schedule must span the full training run
     if args.position_lr_max_steps is None:
