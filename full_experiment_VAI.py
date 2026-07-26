@@ -64,25 +64,34 @@ def main():
     #                     help="Skip training; only run rendering.")
     # parser.add_argument("--skip_render", action="store_true",
     #                     help="Skip rendering; only run training.")
-    parser.add_argument("--iterations", type=int, default=30_000,
-                        help="Number of training iterations (default: 30000).")
+    parser.add_argument("--iterations", type=int, default=100_000,
+                        help="Number of training iterations (default: 100000). More iters = better quality.")
     parser.add_argument("--train_resolution", "-r", type=int, default=1,
                         help="Training image downscale factor passed to train.py via -r (default: 1 = full res). "
                              "Use 1 for full res (requires more VRAM), 2 for half res, 4 for quarter res.")
     parser.add_argument("--resolution_scale", type=float, default=1.0,
                         help="Render resolution downscale factor: 1=full, 2=half, etc.")
-    parser.add_argument("--densify_grad_threshold", type=float, default=0.0002,
-                        help="Gradient threshold for Gaussian densification (default: 0.0002). "
-                             "Higher = fewer Gaussians = less VRAM. Upstream default is 0.0002.")
-    parser.add_argument("--densify_until_iter", type=int, default=15_000,
-                        help="Stop densification after this iteration (default: 15000). "
-                             "Lower = fewer Gaussians at peak. Upstream default is 15000.")
+    parser.add_argument("--densify_grad_threshold", type=float, default=0.0001,
+                        help="Gradient threshold for Gaussian densification (default: 0.0001). "
+                             "Lower = more Gaussians = finer detail. Upstream default is 0.0002.")
+    parser.add_argument("--densify_until_iter", type=int, default=50_000,
+                        help="Stop densification after this iteration (default: 50000). "
+                             "Higher = more Gaussians, better geometry. Upstream default is 15000.")
     parser.add_argument("--optimizer_type", type=str, default="default",
                         choices=["default", "sparse_adam"],
-                        help="Optimizer type for training (default: sparse_adam). "
+                        help="Optimizer type for training (default: default). "
                              "sparse_adam gives ~2.7x speedup with the accelerated rasterizer.")
     parser.add_argument("--antialiasing", action="store_true", default=False,
                         help="Enable EWA antialiasing during training and rendering (requires accelerated rasterizer).")
+    parser.add_argument("--lambda_lpips", type=float, default=0.05,
+                        help="Weight for LPIPS perceptual loss during training (default: 0.05). "
+                             "LPIPS is 40%% of the competition score. Set 0 to disable.")
+    parser.add_argument("--lambda_dssim", type=float, default=0.3,
+                        help="Weight for SSIM loss during training (default: 0.3). "
+                             "SSIM is 30%% of the competition score. Upstream default is 0.2.")
+    parser.add_argument("--opacity_reset_interval", type=int, default=5000,
+                        help="Reset opacity every N iterations (default: 5000). "
+                             "Higher = fewer destructive resets = better quality late in training. Upstream default is 3000.")
     args = parser.parse_args()
 
     data_root   = os.path.abspath(args.data_root)
@@ -128,11 +137,14 @@ def main():
                     # Downsample images to reduce VRAM usage
                     "-r", str(args.train_resolution),
                     # Store GT images in CPU RAM to save GPU VRAM (no quality impact)
-                    "--data_device", "cpu",
+                    # "--data_device", "cpu",
                     # Limit Gaussian count growth to avoid rasterizer OOM
                     "--densify_grad_threshold", str(args.densify_grad_threshold),
                     "--densify_until_iter", str(args.densify_until_iter),
                     "--optimizer_type", args.optimizer_type,
+                    "--lambda_lpips", str(args.lambda_lpips),
+                    "--lambda_dssim", str(args.lambda_dssim),
+                    "--opacity_reset_interval", str(args.opacity_reset_interval),
                 ] + (["--antialiasing"] if args.antialiasing else []) + [
                     "--quiet",
                 ]

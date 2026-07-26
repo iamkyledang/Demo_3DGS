@@ -29,6 +29,12 @@ except ImportError:
     TENSORBOARD_FOUND = False
 
 try:
+    from lpipsPyTorch.modules.lpips import LPIPS as LPIPSModel
+    LPIPS_AVAILABLE = True
+except ImportError:
+    LPIPS_AVAILABLE = False
+
+try:
     from fused_ssim import fused_ssim
     FUSED_SSIM_AVAILABLE = True
 except:
@@ -48,6 +54,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree, opt.optimizer_type)
+
+    # Build a cached LPIPS model so it is not re-instantiated every iteration
+    lpips_model = None
+    if LPIPS_AVAILABLE and opt.lambda_lpips > 0:
+        lpips_model = LPIPSModel('alex').cuda()
+        for p in lpips_model.parameters():
+            p.requires_grad_(False)
+
     scene = Scene(dataset, gaussians)
     gaussians.training_setup(opt)
     if checkpoint:
@@ -124,6 +138,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             ssim_value = ssim(image, gt_image)
 
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_value)
+
+        # Perceptual (LPIPS) loss — directly targets the highest-weight grading metric
+        if lpips_model is not None and opt.lambda_lpips > 0:
+            # LPIPS expects [B, C, H, W] in [-1, 1]
+            rendered_n = image.unsqueeze(0) * 2.0 - 1.0
+            gt_n = gt_image.unsqueeze(0) * 2.0 - 1.0
+            loss = loss + opt.lambda_lpips * lpips_model(rendered_n, gt_n).mean()
 
         # Depth regularization
         Ll1depth_pure = 0.0
