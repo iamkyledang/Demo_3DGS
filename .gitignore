@@ -1,8 +1,15 @@
 *.pyc
 .vscode
 output
+output_1/
+output_2/
+output_3/
 build
 diff_rasterization/diff_rast.egg-info
 diff_rasterization/dist
 tensorboard_3d
 screenshots
+submission_1/
+submission_2/
+submission_3/
+submission.zip
