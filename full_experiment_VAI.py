@@ -64,8 +64,9 @@ def main():
     #                     help="Skip training; only run rendering.")
     # parser.add_argument("--skip_render", action="store_true",
     #                     help="Skip rendering; only run training.")
-    parser.add_argument("--iterations", type=int, default=100_000,
-                        help="Number of training iterations (default: 100000). More iters = better quality.")
+    parser.add_argument("--iterations", type=int, default=30_000,
+                        help="Number of training iterations (default: 30000). "
+                             "~14-15h for 7 scenes on RTX 4090. Use 15000 for ~8h at lower quality.")
     parser.add_argument("--train_resolution", "-r", type=int, default=1,
                         help="Training image downscale factor passed to train.py via -r (default: 1 = full res). "
                              "Use 1 for full res (requires more VRAM), 2 for half res, 4 for quarter res.")
@@ -74,24 +75,24 @@ def main():
     parser.add_argument("--densify_grad_threshold", type=float, default=0.00015,
                         help="Gradient threshold for Gaussian densification (default: 0.00015). "
                              "Lower = more Gaussians = finer detail. Upstream default is 0.0002.")
-    parser.add_argument("--densify_until_iter", type=int, default=30_000,
-                        help="Stop densification after this iteration (default: 30000). "
-                             "Higher = more Gaussians, better geometry. Upstream default is 15000.")
+    parser.add_argument("--densify_until_iter", type=int, default=15_000,
+                        help="Stop densification after this iteration (default: 15000). "
+                             "Set to half of --iterations for best quality. Upstream default is 15000.")
     parser.add_argument("--optimizer_type", type=str, default="default",
                         choices=["default", "sparse_adam"],
                         help="Optimizer type for training (default: default). "
                              "sparse_adam gives ~2.7x speedup with the accelerated rasterizer.")
     parser.add_argument("--antialiasing", action="store_true", default=False,
                         help="Enable EWA antialiasing during training and rendering (requires accelerated rasterizer).")
-    parser.add_argument("--lambda_lpips", type=float, default=0.05,
-                        help="Weight for LPIPS perceptual loss during training (default: 0.05). "
-                             "LPIPS is 40%% of the competition score. Set 0 to disable.")
+    parser.add_argument("--lambda_lpips", type=float, default=0.0,
+                        help="Weight for LPIPS perceptual loss during training (default: 0, disabled). "
+                             "Costs ~40%% speed. Enable with 0.05 only if you have time budget. "
+                             "LPIPS is 40%% of the competition score.")
     parser.add_argument("--lambda_dssim", type=float, default=0.3,
                         help="Weight for SSIM loss during training (default: 0.3). "
                              "SSIM is 30%% of the competition score. Upstream default is 0.2.")
-    parser.add_argument("--opacity_reset_interval", type=int, default=5000,
-                        help="Reset opacity every N iterations (default: 5000). "
-                             "Higher = fewer destructive resets = better quality late in training. Upstream default is 3000.")
+    parser.add_argument("--opacity_reset_interval", type=int, default=3000,
+                        help="Reset opacity every N iterations (default: 3000). Upstream default is 3000.")
     parser.add_argument("--position_lr_max_steps", type=int, default=None,
                         help="Steps over which position LR decays (default: equals --iterations). "
                              "Must match iterations or positions stop being refined early. Upstream default is 30000.")
@@ -100,6 +101,10 @@ def main():
     # Position LR schedule must span the full training run
     if args.position_lr_max_steps is None:
         args.position_lr_max_steps = args.iterations
+
+    # Densify for first half of training if not explicitly set
+    if args.densify_until_iter == 15_000 and args.iterations != 30_000:
+        args.densify_until_iter = args.iterations // 2
 
     data_root   = os.path.abspath(args.data_root)
     output_root = os.path.abspath(args.output_root)
