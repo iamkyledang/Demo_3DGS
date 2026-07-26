@@ -141,9 +141,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Perceptual (LPIPS) loss — directly targets the highest-weight grading metric
         if lpips_model is not None and opt.lambda_lpips > 0:
-            # LPIPS expects [B, C, H, W] in [-1, 1]
-            rendered_n = image.unsqueeze(0) * 2.0 - 1.0
-            gt_n = gt_image.unsqueeze(0) * 2.0 - 1.0
+            # Compute at half resolution: halves intermediate feature map VRAM,
+            # negligible quality difference since LPIPS is a patch-based metric
+            img_half = torch.nn.functional.interpolate(
+                image.unsqueeze(0), scale_factor=0.5, mode='bilinear', align_corners=False)
+            gt_half = torch.nn.functional.interpolate(
+                gt_image.unsqueeze(0), scale_factor=0.5, mode='bilinear', align_corners=False)
+            rendered_n = img_half * 2.0 - 1.0
+            gt_n = gt_half * 2.0 - 1.0
             loss = loss + opt.lambda_lpips * lpips_model(rendered_n, gt_n).mean()
 
         # Depth regularization

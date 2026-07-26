@@ -71,11 +71,11 @@ def main():
                              "Use 1 for full res (requires more VRAM), 2 for half res, 4 for quarter res.")
     parser.add_argument("--resolution_scale", type=float, default=1.0,
                         help="Render resolution downscale factor: 1=full, 2=half, etc.")
-    parser.add_argument("--densify_grad_threshold", type=float, default=0.0001,
-                        help="Gradient threshold for Gaussian densification (default: 0.0001). "
+    parser.add_argument("--densify_grad_threshold", type=float, default=0.00015,
+                        help="Gradient threshold for Gaussian densification (default: 0.00015). "
                              "Lower = more Gaussians = finer detail. Upstream default is 0.0002.")
-    parser.add_argument("--densify_until_iter", type=int, default=50_000,
-                        help="Stop densification after this iteration (default: 50000). "
+    parser.add_argument("--densify_until_iter", type=int, default=30_000,
+                        help="Stop densification after this iteration (default: 30000). "
                              "Higher = more Gaussians, better geometry. Upstream default is 15000.")
     parser.add_argument("--optimizer_type", type=str, default="default",
                         choices=["default", "sparse_adam"],
@@ -92,7 +92,14 @@ def main():
     parser.add_argument("--opacity_reset_interval", type=int, default=5000,
                         help="Reset opacity every N iterations (default: 5000). "
                              "Higher = fewer destructive resets = better quality late in training. Upstream default is 3000.")
+    parser.add_argument("--position_lr_max_steps", type=int, default=None,
+                        help="Steps over which position LR decays (default: equals --iterations). "
+                             "Must match iterations or positions stop being refined early. Upstream default is 30000.")
     args = parser.parse_args()
+
+    # Position LR schedule must span the full training run
+    if args.position_lr_max_steps is None:
+        args.position_lr_max_steps = args.iterations
 
     data_root   = os.path.abspath(args.data_root)
     output_root = os.path.abspath(args.output_root)
@@ -136,8 +143,8 @@ def main():
                     "--save_iterations", str(args.iterations),
                     # Downsample images to reduce VRAM usage
                     "-r", str(args.train_resolution),
-                    # Store GT images in CPU RAM to save GPU VRAM (no quality impact)
-                    # "--data_device", "cpu",
+                    # GT images loaded to GPU on-demand — saves 1-3GB VRAM with zero quality impact
+                    "--data_device", "cpu",
                     # Limit Gaussian count growth to avoid rasterizer OOM
                     "--densify_grad_threshold", str(args.densify_grad_threshold),
                     "--densify_until_iter", str(args.densify_until_iter),
@@ -145,11 +152,14 @@ def main():
                     "--lambda_lpips", str(args.lambda_lpips),
                     "--lambda_dssim", str(args.lambda_dssim),
                     "--opacity_reset_interval", str(args.opacity_reset_interval),
+                    "--position_lr_max_steps", str(args.position_lr_max_steps),
+                    "--disable_viewer",
                 ] + (["--antialiasing"] if args.antialiasing else []) + [
                     "--quiet",
                 ]
-                # Reduce CUDA memory fragmentation (128 MB blocks, garbage collect aggressively)
-                extra_env = {"PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:64"}
+                # Reduce CUDA memory fragmentation; garbage_collection_threshold frees unused
+                # cached blocks more aggressively to avoid fragmentation OOM
+                extra_env = {"PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:128,garbage_collection_threshold:0.8"}
                 run(train_cmd, desc=f"Training {scene}", extra_env=extra_env)
 
         # ------------------------------------------------------------------ #
