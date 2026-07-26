@@ -10,7 +10,7 @@ For each scene:
 
 Usage:
     python full_experiment_VAI.py \
-        --data_root /mnt/passport/VAI_NVS_DATA_ROUND2 \
+        --data_root ../VAI_NVS_DATA_ROUND2 \
         --output_root output
 
 Optional:
@@ -54,7 +54,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Train and render all VAI_NVS_DATA_ROUND2 scenes with gaussian-splatting."
     )
-    parser.add_argument("--data_root", default="/mnt/passport/VAI_NVS_DATA_ROUND2",
+    parser.add_argument("--data_root", default=os.path.join(os.path.dirname(__file__), "..", "VAI_NVS_DATA_ROUND2"),
                         help="Root directory containing per-scene folders.")
     parser.add_argument("--output_root", default="output",
                         help="Root directory for trained model outputs.")
