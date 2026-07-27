@@ -27,7 +27,8 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", default="/mnt/passport/VAI_NVS_DATA_ROUND2",
+    parser.add_argument("--data_root",
+                        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VAI_NVS_DATA_ROUND2"),
                         help="Root directory containing scene folders with test_poses.csv")
     parser.add_argument("--output_root", default="output",
                         help="Root directory containing rendered outputs per scene")
